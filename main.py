@@ -128,40 +128,59 @@ class MyPlugin(Star):
 
     @filter.command("bililogin")
     async def bililogin(self, event: AstrMessageEvent):
-        from astrbot.api.message_components import Plain
+        import asyncio
 
         yield event.plain_result("正在生成 B站 登录二维码...")
 
-        # 先同步生成二维码（很快）
         try:
             qr = bili_login.generate_qrcode()
         except Exception as e:
             yield event.plain_result(f"生成二维码失败: {e}")
             return
 
-        # 发送二维码图片到 QQ
         yield event.plain_result("请用 Bilibili App 扫描下方二维码登录（120秒内有效）")
         yield event.image_result(qr["image_path"])
 
-        # 异步轮询（不阻塞事件循环）
-        last_msg = ""
-        async def on_progress(msg):
-            nonlocal last_msg
-            if msg and msg != last_msg:
-                last_msg = msg
+        # 手动轮询，每隔几秒 yield 一次进度
+        session = qr["session"]
+        key = qr["qrcode_key"]
+        url = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
+        start = asyncio.get_event_loop().time()
 
-        result = await bili_login.async_poll_login(
-            qr["qrcode_key"], qr["session"],
-            timeout=120, progress_callback=on_progress,
-        )
+        while asyncio.get_event_loop().time() - start < 120:
+            resp = session.get(url, params={"qrcode_key": key}, timeout=10)
+            data = resp.json()
+            code = data.get("data", {}).get("code", -1)
+            msg = data.get("data", {}).get("message", "")
 
-        if result["status"] == "success":
-            bili_login.cm.save_cookies(result["cookies"])
-            yield event.plain_result("登录成功！Cookie 已保存")
-        elif result["status"] == "expired":
-            yield event.plain_result("二维码已过期，请重新 /bililogin")
-        else:
-            yield event.plain_result("登录超时（120秒），请重新 /bililogin")
+            if code == 0:  # 登录成功
+                bili_login.cm.save_cookies(dict(session.cookies))
+                yield event.plain_result("登录成功！Cookie 已保存")
+                return
+            elif code == 86038:  # 二维码过期
+                yield event.plain_result("二维码已过期，请重新 /bililogin")
+                return
+
+            # 每 15 秒提醒一次
+            elapsed = int(asyncio.get_event_loop().time() - start)
+            if elapsed > 0 and elapsed % 15 == 0:
+                yield event.plain_result(f"等待扫码中... ({elapsed}秒 / 120秒)")
+
+            await asyncio.sleep(1.5)
+
+        yield event.plain_result("登录超时（120秒），请重新 /bililogin")
+
+    @filter.command("bililogout")
+    async def bililogout(self, event: AstrMessageEvent):
+        """删除已保存的B站Cookie"""
+        from cookie import cookie_manager as cm
+
+        if not cm.is_logged_in():
+            yield event.plain_result("当前没有已保存的 Cookie")
+            return
+
+        cm.clear_cookies()
+        yield event.plain_result("B站 Cookie 已删除")
 
     @filter.command("sendcsv")
     async def sendcsv(self, event: AstrMessageEvent):

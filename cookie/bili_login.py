@@ -27,16 +27,18 @@ HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     ),
     "Referer": "https://www.bilibili.com/",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
 
 QR_GENERATE_URL = "https://passport.bilibili.com/x/passport-login/web/qrcode/generate"
 QR_POLL_URL = "https://passport.bilibili.com/x/passport-login/web/qrcode/poll"
 
 # 扫码状态码
-QR_NOT_SCANNED = 0       # 未扫码
-QR_SCANNED = 1           # 已扫码待确认
-QR_EXPIRED = 2           # 二维码过期
-QR_CONFIRMED = 3         # 已确认（登录成功）
+QR_NOT_SCANNED = 86101   # 未扫码
+QR_SCANNED = 86090       # 已扫码待确认
+QR_EXPIRED = 86038       # 二维码过期
+QR_CONFIRMED = 0         # 已确认（登录成功）
 
 
 def generate_qrcode() -> Optional[dict]:
@@ -121,13 +123,20 @@ def poll_login(qrcode_key: str, session: requests.Session,
         code = poll_data.get("code", -1)
 
         if code == QR_CONFIRMED:
-            # 登录成功！从 session 中提取 Cookie
-            cookies = dict(session.cookies.get_dict())
-            return {
-                "cookies": cookies,
-                "status": "success",
-                "raw": poll_data,
-            }
+            # 登录成功！Cookie 在返回的 url 参数里
+            from urllib.parse import unquote, parse_qs
+            login_url = poll_data.get("url", "")
+            cookies = {}
+            if "?" in login_url:
+                qs = login_url.split("?", 1)[1]
+                for kv in qs.split("&"):
+                    if "=" in kv:
+                        k, v = kv.split("=", 1)
+                        if k in ("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid"):
+                            cookies[k] = unquote(v)
+            # 补充 session 里的其他 cookie（buvid3 等）
+            cookies.update(dict(session.cookies.get_dict()))
+            return {"cookies": cookies, "status": "success", "raw": poll_data}
 
         elif code == QR_EXPIRED:
             return {"status": "expired", "cookies": None}
@@ -167,7 +176,17 @@ async def async_poll_login(qrcode_key: str, session: requests.Session,
         code = poll_data.get("code", -1)
 
         if code == QR_CONFIRMED:
-            cookies = dict(session.cookies.get_dict())
+            from urllib.parse import unquote, parse_qs
+            login_url = poll_data.get("url", "")
+            cookies = {}
+            if "?" in login_url:
+                qs = login_url.split("?", 1)[1]
+                for kv in qs.split("&"):
+                    if "=" in kv:
+                        k, v = kv.split("=", 1)
+                        if k in ("SESSDATA", "bili_jct", "DedeUserID", "DedeUserID__ckMd5", "sid"):
+                            cookies[k] = unquote(v)
+            cookies.update(dict(session.cookies.get_dict()))
             return {"cookies": cookies, "status": "success", "raw": poll_data}
 
         elif code == QR_EXPIRED:
