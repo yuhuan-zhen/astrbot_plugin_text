@@ -26,5 +26,24 @@ class MyPlugin(Star):
             yield event.plain_result("yuhuan")
 
 
+    @filter.command("bilicomment")
+    async def bilicomment(self, event: AstrMessageEvent):
+        bv = event.message_str.replace("bilicomment", "").strip()
+        if not bv:
+            yield event.plain_result("用法: /bilicomment BV号")
+            return
+        ok, data, count = bili.get_comments(bv, max_pages=2)
+        if ok:
+            yield event.plain_result(f"共 {count} 条评论:\n{data[:1500]}")
+        else:
+            yield event.plain_result(f"失败: {data}")
+
+
+
+
+    # async def test(self, event: AstrMessageEvent,video_uid: str):
+    #     bili.bv2aid(video_uid: str)
+    #     # async for result in event.get_video_comments(video_uid):
+    #     yield
     async def terminate(self):
         """可选择实现异步的插件销毁方法，当插件被卸载/停用时会调用。"""
