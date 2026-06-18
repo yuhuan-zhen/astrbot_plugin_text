@@ -13,6 +13,9 @@ import time
 import json
 import requests
 from typing import Optional, Callable
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from cookie import cookie_manager as cm
 
 # ─── 常量 ────────────────────────────────────────────────────────────
 
@@ -24,6 +27,25 @@ HEADERS = {
     ),
     "Referer": "https://www.bilibili.com/",
 }
+
+# 全局 session + Cookie
+_session = None
+
+
+def _get_session() -> requests.Session:
+    """获取带 Cookie 的全局 session（懒加载）"""
+    global _session
+    if _session is None:
+        _session = requests.Session()
+        _session.headers.update(HEADERS)
+        # 加载本地 Cookie
+        cookies = cm.load_cookies()
+        if cookies:
+            _session.cookies.update(cookies)
+        # 先访问首页获取临时 Cookie
+        _session.get("https://www.bilibili.com/", timeout=10)
+    return _session
+
 
 COMMENT_TYPE_VIDEO = 1
 MODE_HOT = 3          # 按热度
@@ -67,7 +89,9 @@ def fetch_comments_page(oid: int, offset: str = "", mode: int = MODE_HOT) -> dic
         "oid": oid, "type": COMMENT_TYPE_VIDEO, "mode": mode,
         "pagination_str": json.dumps({"offset": offset}),
     }
-    resp = requests.get(url, params=params, headers=HEADERS, timeout=10)
+    resp = _get_session().get(url, params=params, timeout=10)
+    if resp.status_code == 412:
+        raise RuntimeError("API_BANNED")
     data = resp.json()
     if data.get("code") != 0:
         raise RuntimeError(f"获取评论失败: {data.get('message', '未知错误')}")
@@ -84,13 +108,50 @@ def fetch_comments_page(oid: int, offset: str = "", mode: int = MODE_HOT) -> dic
     }
 
 
+def _fetch_all_legacy(oid: int, max_pages: int, sort: int,
+                      progress_callback: Callable = None) -> list:
+    """旧版页码 API 降级方案"""
+    all_replies = []
+    for page in range(1, max_pages + 1):
+        url = "https://api.bilibili.com/x/v2/reply"
+        params = {"type": COMMENT_TYPE_VIDEO, "oid": oid,
+                  "pn": page, "ps": 20, "sort": sort}
+        resp = _get_session().get(url, params=params, timeout=10)
+        data = resp.json()
+        if data.get("code") != 0:
+            break
+        replies = data.get("data", {}).get("replies", [])
+        if not replies:
+            break
+        all_replies.extend(replies)
+        if progress_callback:
+            progress_callback(page, data.get("data", {}).get("page", {}).get("count", 0))
+        # 判断是否还有下一页
+        page_info = data.get("data", {}).get("page", {})
+        if page_info.get("num", 0) * 20 >= page_info.get("count", 0):
+            break
+        time.sleep(REQUEST_INTERVAL)
+    return all_replies
+
+
 def fetch_all_comments(oid: int, max_pages: int = 200, mode: int = MODE_HOT,
                        progress_callback: Callable = None) -> list:
     """
     循环翻页获取一级评论。
-
-    max_pages: 安全上限（实际会在 API 返回空时提前结束）
+    优先懒加载 API，遇 412 自动降级到旧版页码 API + Cookie。
     """
+    try:
+        return _fetch_all_lazy(oid, max_pages, mode, progress_callback)
+    except RuntimeError as e:
+        if "API_BANNED" in str(e):
+            sort_val = 0 if mode == MODE_TIME else 2
+            return _fetch_all_legacy(oid, max_pages, sort_val, progress_callback)
+        raise
+
+
+def _fetch_all_lazy(oid: int, max_pages: int, mode: int,
+                    progress_callback: Callable = None) -> list:
+    """新版懒加载分页"""
     all_replies = []
     offset = ""
     page = 0
@@ -157,7 +218,9 @@ def fetch_sub_comments_page(oid: int, root_rpid: int,
         "oid": oid, "type": COMMENT_TYPE_VIDEO,
         "root": root_rpid, "ps": page_size, "pn": page,
     }
-    resp = requests.get(url, params=params, headers=HEADERS, timeout=10)
+    resp = _get_session().get(url, params=params, timeout=10)
+    if resp.status_code == 412:
+        raise RuntimeError("API_BANNED")
     data = resp.json()
     if data.get("code") != 0:
         raise RuntimeError(f"获取子评论失败: {data.get('message', '未知错误')}")
@@ -485,108 +548,3 @@ def get_comments_all(input_str: str, max_main_pages: int = 200,
 
     except Exception as e:
         return False, f"[错误] {e}", 0, 0
-
-
-# ─── 独立运行 ────────────────────────────────────────────────────────
-
-if __name__ == "__main__":
-    import sys
-
-    print("=" * 55)
-    print("  Bilibili 视频评论爬虫 (v4 — 全量爬取)")
-    print("=" * 55)
-    print("  用法:")
-    print("    python bilibili_comment.py <BV号> [页数] [hot/time]")
-    print("    python bilibili_comment.py <BV号> --subs          展开子评论")
-    print("    python bilibili_comment.py <BV号> --all           全量(合并排序+子评论)")
-    print("    python bilibili_comment.py --sub-only <BV号> <rpid>")
-    print("=" * 55)
-    print()
-
-    # --sub-only 模式
-    if "--sub-only" in sys.argv:
-        idx = sys.argv.index("--sub-only")
-        try:
-            video_input = sys.argv[idx + 1]
-            rpid = int(sys.argv[idx + 2])
-        except (IndexError, ValueError):
-            print("用法: python bilibili_comment.py --sub-only <BV号> <rpid>")
-            sys.exit(1)
-        aid = parse_bv_or_aid(video_input)
-        print(f"正在爬取评论 {rpid} 的子回复...")
-        ok, data, count = get_sub_comments(aid, rpid, max_pages=50)
-        if ok:
-            print(f"\n[OK] 共 {count} 条子回复\n")
-            print(data)
-        else:
-            print(data)
-        sys.exit(0)
-
-    # --all 全量模式
-    is_all = "--all" in sys.argv
-    include_subs = "--subs" in sys.argv or is_all
-    args = [a for a in sys.argv[1:] if not a.startswith("--")]
-
-    if len(args) > 0:
-        video_input = args[0]
-        pages = int(args[1]) if len(args) > 1 and args[1].isdigit() else 50
-        sort_arg = args[2] if len(args) > 2 and args[2] in ("hot", "time") else "hot"
-    else:
-        video_input = input("请输入 BV 号 / AV 号 / 视频链接: ").strip()
-        pages_input = input("爬取页数 (默认 50 页): ").strip()
-        pages = int(pages_input) if pages_input.isdigit() else 50
-        sort_arg = input("排序方式 (hot=热度/time=时间/auto=合并, 默认 hot): ").strip() or "hot"
-        sub_input = input("展开子评论? (y/n, 默认 n): ").strip().lower()
-        include_subs = sub_input == "y"
-        is_all = sort_arg == "auto"
-
-    sort_name = "合并(热度+时间)" if is_all else ("热度" if sort_arg == "hot" else "时间")
-    print(f"\n正在解析视频: {video_input}")
-    print(f"策略: {sort_name}, {pages}页, 子评论: {'展开' if include_subs else '仅计数'}")
-
-    if is_all:
-        ok, data, main_count, sub_count = get_comments_all(
-            video_input, max_main_pages=pages, max_sub_pages=50
-        )
-        count = main_count
-        print(f"\n[OK] 主评论 {main_count} 条 + 子评论 {sub_count} 条 = 总计 {main_count + sub_count} 条\n")
-    else:
-        ok, data, count = get_comments(
-            video_input, max_pages=pages, sort=sort_arg,
-            include_subs=include_subs, sub_max_pages=50,
-            merge_both=is_all,
-        )
-        print(f"\n[OK] 共 {count} 条主评论\n")
-
-    if ok:
-        if count > 15:
-            preview_lines = data.split("\n")[:60]
-            print("\n".join(preview_lines))
-            print(f"\n... (共 {count} 条, 已省略)")
-
-            save = input("\n保存到文件? (y/n, 默认 y): ").strip().lower()
-            if save != "n":
-                base_name = f"bilibili_all_{video_input[:12]}_{int(time.time())}"
-                txt_file = f"{base_name}.txt"
-                with open(txt_file, "w", encoding="utf-8") as f:
-                    f.write(data)
-                print(f"[OK] TXT 已保存到: {txt_file}")
-
-                json_file = f"{base_name}.json"
-                if is_all:
-                    _, jdata, _, _ = get_comments_all(
-                        video_input, max_main_pages=pages, max_sub_pages=50,
-                        output_format="json"
-                    )
-                else:
-                    _, jdata, _ = get_comments(
-                        video_input, max_pages=pages, sort=sort_arg,
-                        output_format="json", include_subs=include_subs,
-                    )
-                with open(json_file, "w", encoding="utf-8") as f:
-                    f.write(jdata)
-                print(f"[OK] JSON 已保存到: {json_file}")
-        else:
-            print(data)
-    else:
-        print(data)
