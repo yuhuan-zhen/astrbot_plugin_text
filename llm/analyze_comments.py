@@ -11,7 +11,8 @@ import os
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "json")
 
 
-def build_prompt_from_comments(data: dict, max_comments: int = 20) -> str:
+def build_prompt_from_comments(data: dict, max_comments: int = 20,
+                                custom_prompt: str = "") -> str:
     """将评论数据组装成 LLM 提示词"""
     comments = data.get("comments", [])
     lines = [f"视频: {data.get('video', '未知')}，共 {len(comments)} 条评论\n"]
@@ -21,7 +22,10 @@ def build_prompt_from_comments(data: dict, max_comments: int = 20) -> str:
         likes = c.get("likes", 0)
         lines.append(f"{i}. {user}: {content} [赞{likes}]")
     lines.append("")
-    lines.append("请总结以上B站评论：1. 整体情感倾向 2. 主要讨论话题 3. 高赞观点")
+    if custom_prompt:
+        lines.append(custom_prompt)
+    else:
+        lines.append("请总结以上B站评论：1. 整体情感倾向 2. 主要讨论话题 3. 高赞观点")
     return "\n".join(lines)
 
 

@@ -149,9 +149,11 @@ class MyPlugin(Star):
         if self.config.get("llm_summary", False):
             try:
                 from llm import analyze_comments as ac
+                custom_prompt = self.config.get("llm_keywords", "")
                 prompt = ac.build_prompt_from_comments(
                     {"video": bv, "comments": comments},
-                    max_comments=20
+                    max_comments=20,
+                    custom_prompt=custom_prompt,
                 )
                 umo = event.unified_msg_origin
                 provider_id = await self.context.get_current_chat_provider_id(umo)
