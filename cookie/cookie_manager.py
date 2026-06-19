@@ -10,33 +10,53 @@ import time
 from typing import Optional
 
 
-COOKIE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
+_THIS_DIR = os.path.dirname(os.path.dirname(__file__))
+COOKIE_DIR = os.path.join(_THIS_DIR, "data")
+
+# 备选路径（兼容服务器上多份插件副本的情况）
+_ALT_ROOTS = []
+for _p in ["/AstrBot/data/plugins/astrbot_plugin_text",
+            "/bin/data/plugins/astrbot_plugin_text"]:
+    if os.path.isdir(_p):
+        _ALT_ROOTS.append(_p)
+
 COOKIE_FILE = os.path.join(COOKIE_DIR, "bili_cookies.json")
 
 
 def save_cookies(cookies: dict) -> str:
-    """将 Cookie 字典保存到本地文件"""
-    os.makedirs(COOKIE_DIR, exist_ok=True)
+    """将 Cookie 字典保存到本地文件（写所有可能的位置）"""
     data = {
         "cookies": cookies,
         "saved_at": int(time.time()),
         "saved_at_str": time.strftime("%Y-%m-%d %H:%M:%S"),
     }
-    with open(COOKIE_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    dirs_to_write = {COOKIE_DIR}
+    for root in _ALT_ROOTS:
+        dirs_to_write.add(os.path.join(root, "data"))
+    for d in dirs_to_write:
+        os.makedirs(d, exist_ok=True)
+        fp = os.path.join(d, "bili_cookies.json")
+        with open(fp, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
     return COOKIE_FILE
 
 
 def load_cookies() -> Optional[dict]:
-    """从本地文件加载 Cookie 字典，文件不存在时返回 None"""
-    if not os.path.exists(COOKIE_FILE):
-        return None
-    try:
-        with open(COOKIE_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data.get("cookies")
-    except (json.JSONDecodeError, KeyError):
-        return None
+    """从本地文件加载 Cookie 字典，搜索多个可能位置"""
+    paths_to_try = [COOKIE_FILE]
+    for root in _ALT_ROOTS:
+        if root != _THIS_DIR:
+            paths_to_try.append(os.path.join(root, "data", "bili_cookies.json"))
+
+    for fp in paths_to_try:
+        if os.path.exists(fp):
+            try:
+                with open(fp, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                return data.get("cookies")
+            except (json.JSONDecodeError, KeyError):
+                continue
+    return None
 
 
 def get_cookie_header() -> dict:
@@ -52,9 +72,14 @@ def get_cookie_header() -> dict:
 
 
 def clear_cookies():
-    """删除本地 Cookie 文件"""
-    if os.path.exists(COOKIE_FILE):
-        os.remove(COOKIE_FILE)
+    """删除所有位置的 Cookie 文件"""
+    paths = [COOKIE_FILE]
+    for root in _ALT_ROOTS:
+        if root != _THIS_DIR:
+            paths.append(os.path.join(root, "data", "bili_cookies.json"))
+    for fp in paths:
+        if os.path.exists(fp):
+            os.remove(fp)
 
 
 def is_logged_in() -> bool:
