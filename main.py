@@ -43,7 +43,7 @@ class MyPlugin(Star):
     @filter.command("bilicomment")
     async def bilicomment(self, event: AstrMessageEvent):
         """爬取B站评论 → 存CSV → 发送 → 删除"""
-        import os, csv, time
+        import os, csv, json, time
 
         # 读取配置
         default_pages = self.config.get("default_pages", 5)
@@ -135,8 +135,33 @@ class MyPlugin(Star):
             yield event.plain_result(f"评论已爬取 ({main_count}+{sub_count}条)，但文件发送失败: {e}\n文件保留在: {csv_path}")
             return
 
-            yield event.plain_result(f"评论已爬取 ({main_count}+{sub_count}条)，但文件发送失败: {e}\n文件保留在: {csv_path}")
-            return
+        # 同时保存 JSON
+        json_dir = os.path.join(os.path.dirname(__file__), "data", "json")
+        os.makedirs(json_dir, exist_ok=True)
+        json_name = f"bili_{bv[:10]}_{ts}.json"
+        json_path = os.path.join(json_dir, json_name)
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump({"video": bv, "crawled_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                       "main_count": len(comments), "comments": comments},
+                      f, ensure_ascii=False, indent=2)
+
+        # AI 总结（根据配置）
+        if self.config.get("llm_summary", False):
+            try:
+                from llm import analyze_comments as ac
+                prompt = ac.build_prompt_from_comments(
+                    {"video": bv, "comments": comments},
+                    max_comments=20
+                )
+                umo = event.unified_msg_origin
+                provider_id = await self.context.get_current_chat_provider_id(umo)
+                resp = await self.context.llm_generate(
+                    chat_provider_id=provider_id,
+                    prompt=prompt,
+                )
+                yield event.plain_result(f"AI 总结：\n{resp.completion_text}")
+            except Exception as e:
+                yield event.plain_result(f"AI 分析失败: {e}")
 
         # 发送成功后删除（根据配置）
         if self.config.get("auto_delete_csv", True):
