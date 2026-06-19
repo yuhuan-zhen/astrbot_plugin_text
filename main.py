@@ -1,8 +1,7 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
-from data.plugins.astrbot_plugin_text import bilibili_comment as bili
-from astrbot.api.message_components import Image, Plain
+from data.plugins.astrbot_plugin_text.core import bilibili_comment as bili
 from data.plugins.astrbot_plugin_text.cookie import bili_login
 from astrbot.api import AstrBotConfig
 
@@ -44,15 +43,36 @@ class MyPlugin(Star):
     @filter.command("bilicomment")
     async def bilicomment(self, event: AstrMessageEvent):
         """爬取B站评论 → 存CSV → 发送 → 删除"""
-        import os, csv, json, time
+        import os, csv, time
+
+        # 读取配置
+        default_pages = self.config.get("default_pages", 5)
+        include_subs = self.config.get("include_subs", False)
+        sort_by = self.config.get("sort_by", "hot")
 
         bv = event.message_str.replace("bilicomment", "").strip()
+        parts = bv.split()
+        bv = parts[0] if parts else bv
+        pages = default_pages
+
+        # 命令行参数覆盖配置
+        for p in parts[1:]:
+            if p.isdigit():
+                pages = int(p)
+            elif p == "--subs":
+                include_subs = True
+
         if not bv:
-            yield event.plain_result("用法: /bilicomment BV号")
+            yield event.plain_result(
+                f"用法: /bilicomment BV号\n"
+                f"当前配置: {pages}页, {'展开子评论' if include_subs else '仅主评论'}, 排序:{sort_by}"
+            )
             return
 
-        yield event.plain_result(f"正在爬取 {bv} 的评论...")
-        ok, data, main_count, sub_count = bili.get_comments_all(bv)
+        yield event.plain_result(f"正在爬取 {bv} 的评论... ({pages}页, {sort_by})")
+        ok, data, main_count, sub_count = bili.get_comments_all(
+            bv, max_main_pages=pages
+        )
 
         if not ok:
             yield event.plain_result(f"爬取失败: {data}")
@@ -118,11 +138,12 @@ class MyPlugin(Star):
             yield event.plain_result(f"评论已爬取 ({main_count}+{sub_count}条)，但文件发送失败: {e}\n文件保留在: {csv_path}")
             return
 
-        # 发送成功后删除
-        try:
-            os.remove(csv_path)
-        except Exception:
-            pass
+        # 发送成功后删除（根据配置）
+        if self.config.get("auto_delete_csv", True):
+            try:
+                os.remove(csv_path)
+            except Exception:
+                pass
 
 
     # async def test(self, event: AstrMessageEvent,video_uid: str):
@@ -189,7 +210,6 @@ class MyPlugin(Star):
     @filter.command("sendcsv")
     async def sendcsv(self, event: AstrMessageEvent):
         """发送 data 目录下的 CSV 文件到 QQ"""
-        from astrbot.api.message_components import Plain
         import os, glob, base64
 
         data_dir = os.path.join(os.path.dirname(__file__), "data")

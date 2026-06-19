@@ -1,67 +1,51 @@
 {
+  "default_pages": {
+    "description": "默认爬取页数",
+    "type": "int",
+    "default": 5
+  },
+  "include_subs": {
+    "description": "是否默认展开子评论",
+    "type": "bool",
+    "default": false
+  },
+  "auto_delete_csv": {
+    "description": "发送后自动删除 CSV",
+    "type": "bool",
+    "default": true
+  },
+  "sort_by": {
+    "description": "默认排序方式",
+    "type": "string",
+    "options": [
+      "hot",
+      "time"
+    ],
+    "default": "hot"
+  },
   "token": {
     "description": "Bot Token",
-    "type": "string"
+    "type": "string",
+    "default": ""
   },
-  "sub_config": {
-    "description": "测试嵌套配置",
-    "type": "object",
-    "hint": "xxxx",
-    "items": {
-      "name": {
-        "description": "testsub",
-        "type": "string",
-        "hint": "xxxx"
-      },
-      "id": {
-        "description": "testsub",
-        "type": "int",
-        "hint": "xxxx"
-      },
-      "time": {
-        "description": "testsub",
-        "type": "int",
-        "hint": "xxxx",
-        "default": 123
-      },
-      "model": {
-        "description": "testsub",
-        "options":["chat", "agent", "workflow"],
-        "type": "string",
-        "hint": "xxxx",
-        "default": "chat"
-      },
-      "llm": {
-        "description": "是否开启AI总结",
-        "type": "bool",
-        "hint": "启用AI总结后会通过JSON发送大模型",
-        "default": false
-      },
-      "llm_total": {
-        "description": "AI总结的关键词",
-        "type": "text",
-        "hint": "",
-        "default":"123"
-      },
-      "fasong_csv": {
-        "description": "是否发送json文件",
-        "type": "bool",
-        "hint": "启用后发送json文件",
-        "default": false
-      },
-      "fasong_json": {
-        "description": "是否发送csv文件",
-        "type": "bool",
-        "hint": "启用后发送csv文件",
-        "default": false
-      },
-      "fasong_excl": {
-        "description": "是否发送excl文件",
-        "type": "bool",
-        "hint": "启用后发送excl文件",
-        "default": false
-      }
-
-    }
+  "fasong_csv": {
+    "description": "是否发送 CSV 文件",
+    "type": "bool",
+    "default": true
+  },
+  "fasong_json": {
+    "description": "是否发送 JSON 文件",
+    "type": "bool",
+    "default": false
+  },
+  "llm_summary": {
+    "description": "启用 AI 总结评论",
+    "type": "bool",
+    "default": false
+  },
+  "llm_keywords": {
+    "description": "AI 总结的关键词",
+    "type": "text",
+    "default": ""
   }
 }

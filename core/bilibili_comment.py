@@ -14,8 +14,13 @@ import json
 import requests
 from typing import Optional, Callable
 import sys, os
-sys.path.insert(0, os.path.dirname(__file__))
-from cookie import cookie_manager as cm
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
+
+try:
+    from cookie import cookie_manager as cm
+except ImportError:
+    from ..cookie import cookie_manager as cm
 
 
 
