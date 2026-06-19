@@ -1,6 +1,7 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
+from astrbot.api.message_components import File, Plain
 import sys, os
 sys.path.insert(0, os.path.dirname(__file__))
 from core import bilibili_comment as bili
@@ -127,14 +128,21 @@ class MyPlugin(Star):
                         c.get("rpid", ""),
                     ])
 
-        # 发送 CSV 文件（通过 chain_result + File 组件）
-        from astrbot.api.message_components import File, Plain
-
+        # 发送 CSV 文件（注册到文件服务，go-cqhttp 通过 HTTP 下载）
         try:
-            yield event.chain_result([
-                Plain(f"共 {main_count} 条主评论 + {sub_count} 条子评论，正在发送 {csv_name} ..."),
-                File(name=csv_name, file=csv_path),
-            ])
+            from astrbot.core import file_token_service
+            import socket
+            token = await file_token_service.register_file(csv_path, timeout=120)
+            host_ip = socket.gethostbyname(socket.gethostname())
+            file_url = f"http://{host_ip}:6185/api/file/{token}"
+            from astrbot.core.message.message_event_result import MessageEventResult
+            result = MessageEventResult()
+            result.chain = [
+                Plain(f"共 {main_count} 条主评论 + {sub_count} 条子评论"),
+                File(name=csv_name, url=file_url),
+            ]
+            event.set_result(result)
+            yield
         except Exception as e:
             yield event.plain_result(f"评论已爬取 ({main_count}+{sub_count}条)，但文件发送失败: {e}\n文件保留在: {csv_path}")
             return
