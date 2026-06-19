@@ -13,9 +13,12 @@ import time
 import json
 import requests
 from typing import Optional, Callable
-import sys, os
-sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from cookie import cookie_manager as cm
+try:
+    from ..cookie import cookie_manager as cm
+except ImportError:
+    import sys, os
+    sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+    from cookie import cookie_manager as cm
 
 
 
