@@ -4,13 +4,17 @@ from astrbot.api import logger
 from data.plugins.astrbot_plugin_text import bilibili_comment as bili
 from astrbot.api.message_components import Image, Plain
 from data.plugins.astrbot_plugin_text.cookie import bili_login
+from astrbot.api import AstrBotConfig
+
 
 
 @register("helloworld", "YourName", "一个简单的 Hello World 插件", "1.0.0")
 class MyPlugin(Star):
-    def __init__(self, context: Context):
+    def __init__(self, context: Context, config: AstrBotConfig):  # AstrBotConfig 继承自 Dict，拥有字典的所有方法
         super().__init__(context)
-
+        self.config = config
+        # 支持直接保存配置
+        # self.config.save_config() # 保存配置
     async def initialize(self):
         """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
 

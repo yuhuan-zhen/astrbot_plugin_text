@@ -30,7 +30,38 @@
         "type": "string",
         "hint": "xxxx",
         "default": "chat"
+      },
+      "llm": {
+        "description": "是否开启AI总结",
+        "type": "bool",
+        "hint": "启用AI总结后会通过JSON发送大模型",
+        "default": false
+      },
+      "llm_total": {
+        "description": "AI总结的关键词",
+        "type": "text",
+        "hint": "",
+        "default":"123"
+      },
+      "fasong_csv": {
+        "description": "是否发送json文件",
+        "type": "bool",
+        "hint": "启用后发送json文件",
+        "default": false
+      },
+      "fasong_json": {
+        "description": "是否发送csv文件",
+        "type": "bool",
+        "hint": "启用后发送csv文件",
+        "default": false
+      },
+      "fasong_excl": {
+        "description": "是否发送excl文件",
+        "type": "bool",
+        "hint": "启用后发送excl文件",
+        "default": false
       }
+
     }
   }
 }
