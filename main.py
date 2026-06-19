@@ -98,7 +98,10 @@ class MyPlugin(Star):
         import json as _json
         comments = _json.loads(json_data)
 
-        with open(csv_path, "w", encoding="utf-8-sig", newline="") as f:
+        import stat
+        _csv_fd = os.open(csv_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                          stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+        with os.fdopen(_csv_fd, "w", encoding="utf-8-sig", newline="") as f:
             writer = csv.writer(f)
             writer.writerow(["层级", "rpid", "用户", "UID", "评论内容", "点赞数", "时间", "所属主评论"])
             for c in comments:
@@ -112,7 +115,6 @@ class MyPlugin(Star):
                     c.get("time_str", ""),
                     "",
                 ])
-                # 子评论
                 for sub in c.get("sub_replies", []):
                     writer.writerow([
                         "子回复",
@@ -124,12 +126,6 @@ class MyPlugin(Star):
                         sub.get("time_str", ""),
                         c.get("rpid", ""),
                     ])
-
-        # 开放文件权限（Linux 下 Lagrange 可能无权限读取）
-        try:
-            os.chmod(csv_path, 0o644)
-        except Exception:
-            pass
 
         # 发送 CSV 文件（通过 chain_result + File 组件）
         from astrbot.api.message_components import File, Plain
@@ -148,14 +144,12 @@ class MyPlugin(Star):
         os.makedirs(json_dir, exist_ok=True)
         json_name = f"bili_{bv[:10]}_{ts}.json"
         json_path = os.path.join(json_dir, json_name)
-        with open(json_path, "w", encoding="utf-8") as f:
+        _json_fd = os.open(json_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+                           stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+        with os.fdopen(_json_fd, "w", encoding="utf-8") as f:
             json.dump({"video": bv, "crawled_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                        "main_count": len(comments), "comments": comments},
                       f, ensure_ascii=False, indent=2)
-            try:
-                os.chmod(json_path, 0o644)
-            except Exception:
-                pass
 
         # AI 总结（根据配置）
         if self.config.get("llm_summary", False):
