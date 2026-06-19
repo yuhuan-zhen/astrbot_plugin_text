@@ -126,13 +126,12 @@ class MyPlugin(Star):
                     ])
 
         # 开放文件权限（Linux 下 Lagrange 可能无权限读取）
-        import stat
         try:
-            os.chmod(csv_path, stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
+            os.chmod(csv_path, 0o644)
         except Exception:
             pass
 
-        # 发送 CSV 文件
+        # 发送 CSV 文件（通过 chain_result + File 组件）
         from astrbot.api.message_components import File, Plain
 
         try:
@@ -141,15 +140,7 @@ class MyPlugin(Star):
                 File(name=csv_name, file=csv_path),
             ])
         except Exception as e:
-            # 文件发送失败时，回退到发送文本内容
-            try:
-                with open(csv_path, "r", encoding="utf-8-sig") as _f:
-                    _text = _f.read(1500)
-                yield event.plain_result(
-                    f"评论已爬取 ({main_count}+{sub_count}条)，文件发送失败，以下是前1500字符:\n{_text}"
-                )
-            except Exception:
-                yield event.plain_result(f"评论已爬取 ({main_count}+{sub_count}条)，但文件发送失败: {e}\n文件保留在: {csv_path}")
+            yield event.plain_result(f"评论已爬取 ({main_count}+{sub_count}条)，但文件发送失败: {e}\n文件保留在: {csv_path}")
             return
 
         # 同时保存 JSON
