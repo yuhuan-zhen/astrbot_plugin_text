@@ -1,8 +1,10 @@
 from astrbot.api.event import filter, AstrMessageEvent
 from astrbot.api.star import Context, Star, register
 from astrbot.api import logger
-from data.plugins.astrbot_plugin_text.core import bilibili_comment as bili
-from data.plugins.astrbot_plugin_text.cookie import bili_login
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from core import bilibili_comment as bili
+from cookie import bili_login
 from astrbot.api import AstrBotConfig
 
 
