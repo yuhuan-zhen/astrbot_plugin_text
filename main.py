@@ -195,6 +195,31 @@ class MyPlugin(Star):
 
         yield event.plain_result("登录超时（120秒），请重新 /bililogin")
 
+    @filter.command("biliai")
+    async def biliai(self, event: AstrMessageEvent):
+        """调用 AI 分析最新爬取的评论"""
+        from llm import analyze_comments
+
+        data = analyze_comments.load_latest_comments()
+        if not data:
+            yield event.plain_result("data/json/ 下没有评论 JSON，请先 /bilicomment")
+            return
+
+        prompt = analyze_comments.build_prompt_from_comments(data)
+        comments = data.get("comments", [])
+        yield event.plain_result(f"正在分析 {len(comments)} 条评论...")
+
+        try:
+            umo = event.unified_msg_origin
+            provider_id = await self.context.get_current_chat_provider_id(umo)
+            resp = await self.context.llm_generate(
+                chat_provider_id=provider_id,
+                prompt=prompt,
+            )
+            yield event.plain_result(resp.completion_text)
+        except Exception as e:
+            yield event.plain_result(f"AI 分析失败: {e}")
+
     @filter.command("bililogout")
     async def bililogout(self, event: AstrMessageEvent):
         """删除已保存的B站Cookie"""
