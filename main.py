@@ -125,6 +125,12 @@ class MyPlugin(Star):
                         c.get("rpid", ""),
                     ])
 
+        # 开放文件权限（Linux 下 Lagrange 可能无权限读取）
+        try:
+            os.chmod(csv_path, 0o644)
+        except Exception:
+            pass
+
         # 发送 CSV 文件（通过 chain_result + File 组件）
         from astrbot.api.message_components import File, Plain
 
@@ -146,6 +152,10 @@ class MyPlugin(Star):
             json.dump({"video": bv, "crawled_at": time.strftime("%Y-%m-%d %H:%M:%S"),
                        "main_count": len(comments), "comments": comments},
                       f, ensure_ascii=False, indent=2)
+            try:
+                os.chmod(json_path, 0o644)
+            except Exception:
+                pass
 
         # AI 总结（根据配置）
         if self.config.get("llm_summary", False):
