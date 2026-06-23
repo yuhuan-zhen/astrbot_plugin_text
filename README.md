@@ -117,10 +117,18 @@ MIT License
 
 ## 参考与致谢
 
-本项目参考了以下开源项目：
+本项目基于 [AstrBot](https://github.com/AstrBotDevs/AstrBot) 框架开发，感谢 AstrBot 社区提供的优秀基础设施。
+
+参考了以下开源项目：
 
 - [MediaCrawler](https://github.com/NanmiCoder/MediaCrawler) — 社交媒体爬虫框架
 - [astrbot_plugin_biliVideo](https://github.com/storyAura/astrbot_plugin_biliVideo) — AstrBot B站视频插件
+
+相关资源：
+
+- [AstrBot 项目主页](https://github.com/AstrBotDevs/AstrBot)
+- [插件开发文档（中文）](https://docs.astrbot.app/dev/star/plugin-new.html)
+- [Plugin Development Docs（English）](https://docs.astrbot.app/en/dev/star/plugin-new.html)
 
 ## 贡献
 
