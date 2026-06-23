@@ -1,51 +1,53 @@
 {
   "default_pages": {
-    "description": "默认爬取页数",
+    "description": "【爬取设置】默认爬取页数",
     "type": "int",
     "default": 5
   },
   "include_subs": {
-    "description": "是否默认展开子评论",
+    "description": "【爬取设置】是否默认展开子评论",
     "type": "bool",
     "default": false
   },
-  "auto_delete_csv": {
-    "description": "发送后自动删除 CSV",
-    "type": "bool",
-    "default": true
-  },
   "sort_by": {
-    "description": "默认排序方式",
+    "description": "【爬取设置】默认排序方式",
     "type": "string",
-    "options": [
-      "hot",
-      "time"
-    ],
+    "options": ["hot", "time"],
     "default": "hot"
   },
-  "token": {
-    "description": "Bot Token",
-    "type": "string",
-    "default": ""
-  },
   "fasong_csv": {
-    "description": "是否发送 CSV 文件",
+    "description": "【文件格式】保存并发送 CSV",
     "type": "bool",
     "default": true
   },
   "fasong_json": {
-    "description": "是否发送 JSON 文件",
+    "description": "【文件格式】保存并发送 JSON",
     "type": "bool",
     "default": false
   },
+  "fasong_excel": {
+    "description": "【文件格式】保存并发送 Excel",
+    "type": "bool",
+    "default": false
+  },
+  "auto_delete_csv": {
+    "description": "【文件格式】发送后自动删除",
+    "type": "bool",
+    "default": true
+  },
   "llm_summary": {
-    "description": "启用 AI 总结评论",
+    "description": "【AI 分析】启用 AI 总结评论",
     "type": "bool",
     "default": false
   },
   "llm_keywords": {
-    "description": "AI 总结的关键词",
+    "description": "【AI 分析】AI 总结提示词（留空用默认）",
     "type": "text",
+    "default": ""
+  },
+  "token": {
+    "description": "【高级】Bot Token",
+    "type": "string",
     "default": ""
   }
 }

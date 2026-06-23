@@ -7,6 +7,8 @@ sys.path.insert(0, os.path.dirname(__file__))
 from core import bilibili_comment as bili
 from cookie import bili_login
 from astrbot.api import AstrBotConfig
+from core import save as sj
+import json as _json
 
 
 
@@ -46,7 +48,7 @@ class MyPlugin(Star):
     @filter.command("bilicomment")
     async def bilicomment(self, event: AstrMessageEvent):
         """爬取B站评论 → 存CSV → 发送 → 删除"""
-        import os, csv, json, time
+        import os, time
 
         # 读取配置
         default_pages = self.config.get("default_pages", 5)
@@ -81,83 +83,60 @@ class MyPlugin(Star):
             yield event.plain_result(f"爬取失败: {data}")
             return
 
-        # 存 CSV
-        data_dir = os.path.join(os.path.dirname(__file__), "data")
-        os.makedirs(data_dir, exist_ok=True)
-
-        ts = int(time.time())
-        csv_name = f"bili_{bv[:10]}_{ts}.csv"
-        csv_path = os.path.join(data_dir, csv_name)
-
-        # 从 get_comments_all 拿到的 data 里提取评论
-        # data 是 format_all_comments 返回的可读文本，需要重新调 JSON 接口拿结构化数据
+        # 获取结构化评论数据
         ok2, json_data, mc, sc = bili.get_comments_all(bv, output_format="json")
         if not ok2:
-            yield event.plain_result(f"评论爬取成功，但CSV生成失败: {json_data}")
+            yield event.plain_result(f"评论爬取成功，但数据获取失败: {json_data}")
             return
-
-        import json as _json
         comments = _json.loads(json_data)
+        ts = int(time.time())
+        csv_name = f"bili_{bv[:10]}_{ts}.csv"
 
-        import stat
-        _csv_fd = os.open(csv_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                          stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
-        with os.fdopen(_csv_fd, "w", encoding="utf-8-sig", newline="") as f:
-            writer = csv.writer(f)
-            writer.writerow(["层级", "rpid", "用户", "UID", "评论内容", "点赞数", "时间", "所属主评论"])
-            for c in comments:
-                writer.writerow([
-                    "主评论",
-                    c.get("rpid", ""),
-                    c.get("user", ""),
-                    c.get("uid", ""),
-                    c.get("content", "").replace("\n", " "),
-                    c.get("likes", 0),
-                    c.get("time_str", ""),
-                    "",
+        # 保存文件（根据配置选择性保存）
+        _paths = sj.save_comments(
+            bv, comments,
+            save_csv=self.config.get("fasong_csv", True),
+            save_json=self.config.get("fasong_json", False),
+            save_excel=self.config.get("fasong_excel", False),
+        )
+        csv_path = _paths.get("csv")
+        json_path = _paths.get("json")
+        excel_path = _paths.get("excel")
+
+        # 发送文件（注册到文件服务，go-cqhttp 通过 HTTP 下载）
+        from astrbot.core import file_token_service
+        import socket
+        host_ip = socket.gethostbyname(socket.gethostname())
+        _sent_any = False
+
+        # 发送 CSV
+        if csv_path:
+            try:
+                token = await file_token_service.register_file(csv_path, timeout=120)
+                file_url = f"http://{host_ip}:6185/api/file/{token}"
+                _sent_any = True
+                yield event.chain_result([
+                    Plain(f"共 {main_count} 条主评论 + {sub_count} 条子评论"),
+                    File(name=csv_name, url=file_url),
                 ])
-                for sub in c.get("sub_replies", []):
-                    writer.writerow([
-                        "子回复",
-                        sub.get("rpid", ""),
-                        sub.get("user", ""),
-                        sub.get("uid", ""),
-                        sub.get("content", "").replace("\n", " "),
-                        sub.get("likes", 0),
-                        sub.get("time_str", ""),
-                        c.get("rpid", ""),
-                    ])
+            except Exception as e:
+                yield event.plain_result(f"CSV 发送失败: {e}")
 
-        # 发送 CSV 文件（注册到文件服务，go-cqhttp 通过 HTTP 下载）
-        try:
-            from astrbot.core import file_token_service
-            import socket
-            token = await file_token_service.register_file(csv_path, timeout=120)
-            host_ip = socket.gethostbyname(socket.gethostname())
-            file_url = f"http://{host_ip}:6185/api/file/{token}"
-            from astrbot.core.message.message_event_result import MessageEventResult
-            result = MessageEventResult()
-            result.chain = [
-                Plain(f"共 {main_count} 条主评论 + {sub_count} 条子评论"),
-                File(name=csv_name, url=file_url),
-            ]
-            event.set_result(result)
-            yield
-        except Exception as e:
-            yield event.plain_result(f"评论已爬取 ({main_count}+{sub_count}条)，但文件发送失败: {e}\n文件保留在: {csv_path}")
+        # 发送 Excel
+        if excel_path:
+            try:
+                excel_name = os.path.basename(excel_path)
+                token = await file_token_service.register_file(excel_path, timeout=120)
+                file_url = f"http://{host_ip}:6185/api/file/{token}"
+                yield event.chain_result([
+                    File(name=excel_name, url=file_url),
+                ])
+            except Exception as e:
+                yield event.plain_result(f"Excel 发送失败: {e}")
+
+        if not _sent_any and not excel_path:
+            yield event.plain_result(f"评论已爬取 ({main_count}+{sub_count}条)，但未生成任何文件")
             return
-
-        # 同时保存 JSON
-        json_dir = os.path.join(os.path.dirname(__file__), "data", "json")
-        os.makedirs(json_dir, exist_ok=True)
-        json_name = f"bili_{bv[:10]}_{ts}.json"
-        json_path = os.path.join(json_dir, json_name)
-        _json_fd = os.open(json_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                           stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IROTH)
-        with os.fdopen(_json_fd, "w", encoding="utf-8") as f:
-            json.dump({"video": bv, "crawled_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                       "main_count": len(comments), "comments": comments},
-                      f, ensure_ascii=False, indent=2)
 
         # AI 总结（根据配置）
         if self.config.get("llm_summary", False):
@@ -243,7 +222,7 @@ class MyPlugin(Star):
 
         data = analyze_comments.load_latest_comments()
         if not data:
-            yield event.plain_result("data/json/ 下没有评论 JSON，请先 /bilicomment")
+            yield event.plain_result("data/ 下没有评论 JSON，请先 /bilicomment")
             return
 
         prompt = analyze_comments.build_prompt_from_comments(data)

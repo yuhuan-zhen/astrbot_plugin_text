@@ -1,14 +1,14 @@
 """
 评论 AI 分析模块
 ================
-读取 data/json/ 下的评论，通过 AstrBot 内置 LLM 进行分析。
+读取 data/ 下的评论 JSON，通过 AstrBot 内置 LLM 进行分析。
 """
 
 import json
 import glob
 import os
 
-DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "json")
+DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 
 
 def build_prompt_from_comments(data: dict, max_comments: int = 20,
@@ -30,7 +30,7 @@ def build_prompt_from_comments(data: dict, max_comments: int = 20,
 
 
 def find_latest_json() -> str | None:
-    """返回 data/json/ 下最新的 JSON 文件路径"""
+    """返回 data/ 下最新的 JSON 文件路径"""
     files = sorted(glob.glob(os.path.join(DATA_DIR, "*.json")))
     return files[-1] if files else None
 
